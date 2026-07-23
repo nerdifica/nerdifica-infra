@@ -18,8 +18,13 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            mkdir -p ${{ secrets.INFRA_DIR }}
             cd ${{ secrets.INFRA_DIR }}
-            git pull origin master
+            if [ -d .git ]; then
+              git pull origin master
+            else
+              git clone https://github.com/nerdifica/nerdifica-infra.git .
+            fi
             docker compose pull
             docker compose up -d
             docker image prune -f
