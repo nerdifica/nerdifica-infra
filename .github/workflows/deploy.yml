@@ -29,7 +29,7 @@ jobs:
             fi
             sudo -n docker compose pull
             sudo -n docker compose up -d
-            sleep 15
+            sleep 40
             if sudo -n docker compose ps | grep -qi restarting; then
               echo "::error::One or more services are crash-looping after deploy"
               sudo -n docker compose ps

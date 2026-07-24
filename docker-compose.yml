@@ -50,12 +50,22 @@ services:
         condition: service_started
       api:
         condition: service_started
-    # Reloads periodically so renewed certificates (written by the certbot
-    # service below) get picked up without a manual restart. The first reload
-    # races nginx's own startup and harmlessly no-ops; every reload after that
+    # Waits for cert-init (above) to write a certificate before starting for
+    # real — the depends_on condition above is a best-effort hint, but not
+    # every docker compose version actually blocks on it, so this loop is
+    # what actually prevents the "no such file" crash-loop if nginx's
+    # container gets started before cert-init finishes. Also reloads
+    # periodically so renewed certificates (written by the certbot service
+    # below) get picked up without a manual restart; the first such reload
+    # races nginx's own startup and harmlessly no-ops, every one after that
     # succeeds.
     entrypoint: >
       /bin/sh -c "
+      i=0;
+      while [ ! -f /etc/letsencrypt/live/nerdifica.com/fullchain.pem ] && [ $$i -lt 30 ]; do
+        sleep 1;
+        i=$$((i + 1));
+      done;
       trap exit TERM;
       while :; do
         nginx -s reload;
