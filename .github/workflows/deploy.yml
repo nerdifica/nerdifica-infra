@@ -17,15 +17,16 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
           script: |
-            sudo mkdir -p ${{ secrets.INFRA_DIR }}
-            sudo chown -R $(whoami):$(whoami) ${{ secrets.INFRA_DIR }}
+            sudo -n mkdir -p ${{ secrets.INFRA_DIR }}
+            sudo -n chown -R $(whoami):$(whoami) ${{ secrets.INFRA_DIR }}
             cd ${{ secrets.INFRA_DIR }}
             if [ -d .git ]; then
               git pull origin master
             else
               git clone https://github.com/nerdifica/nerdifica-infra.git .
             fi
-            sudo docker compose pull
-            sudo docker compose up -d
-            sudo docker image prune -f
+            sudo -n docker compose pull
+            sudo -n docker compose up -d
+            sudo -n docker image prune -f
