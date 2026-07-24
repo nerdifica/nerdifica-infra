@@ -61,7 +61,7 @@ This infra repo's own `deploy.yml` runs on its own push to `master` and does a f
 
 Site build args (`NUXT_PUBLIC_API_BASE`, `NUXT_PUBLIC_ADSENSE_ID`) are baked in at image build time via GitHub Actions repo variables — changing them requires a rebuild, not just an env var change on the host.
 
-`nginx/nginx.conf` currently proxies with `server_name _` (catch-all, no TLS) — HTTPS/domain-specific server_name is not yet wired in.
+`nginx/nginx.conf` proxies for `nerdifica.com`/`www.nerdifica.com` and terminates TLS on 443, redirecting 80 → 443 (except for the ACME challenge path). Certificates come from Let's Encrypt: `init-letsencrypt.sh` is a one-time manual bootstrap (run once via SSH on the host after DNS already resolves to it — see script comments for why the order matters), after which the `certbot` service in `docker-compose.yml` renews automatically and `nginx` reloads periodically to pick up renewed certs. Changing the domain means editing both `nginx/nginx.conf` and the `domains=(...)` list in `init-letsencrypt.sh`.
 
 ## nerdifica-site architecture (Nuxt 4)
 

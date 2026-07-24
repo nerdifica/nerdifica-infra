@@ -1,2 +1,5 @@
 nerdifica-site/
 nerdifica-api/
+
+# Let's Encrypt certs/keys generated on the host by init-letsencrypt.sh / certbot
+certbot/
