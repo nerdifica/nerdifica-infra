@@ -29,4 +29,11 @@ jobs:
             fi
             sudo -n docker compose pull
             sudo -n docker compose up -d
+            sleep 15
+            if sudo -n docker compose ps | grep -qi restarting; then
+              echo "::error::One or more services are crash-looping after deploy"
+              sudo -n docker compose ps
+              sudo -n docker compose logs --tail=50
+              exit 1
+            fi
             sudo -n docker image prune -f

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# One-time bootstrap to obtain the first Let's Encrypt certificate.
+# One-time bootstrap to obtain the first real Let's Encrypt certificate.
 #
 # Run this manually on the production host, once, after DNS for the
 # domains below already resolves to this host's public IP (Let's Encrypt
-# validates ownership over HTTP, so the deploy's regular `docker compose
-# pull && up -d` is not enough by itself — nginx needs a certificate to
-# even start its 443 server block, which is the chicken-and-egg problem
-# this script works around with a throwaway self-signed cert).
+# validates ownership over HTTP). `docker compose up -d` alone is safe to
+# run before this — the `cert-init` service in docker-compose.yml already
+# guarantees nginx has *a* certificate (a throwaway self-signed one) to
+# start with; this script replaces it with the real thing.
 #
 # After this runs once, the `certbot` service in docker-compose.yml renews
 # the real certificate automatically — no need to run this again unless
@@ -21,33 +21,11 @@ fi
 
 domains=(nerdifica.com www.nerdifica.com)
 rsa_key_size=4096
-data_path="./certbot"
 email="${CERTBOT_EMAIL:?Set CERTBOT_EMAIL (see .env.example) before running this script}"
 staging="${STAGING:-0}"
 
-if [ -d "$data_path/conf/live/${domains[0]}" ]; then
-  read -r -p "Certificate for ${domains[0]} already exists. Replace it? (y/N) " decision
-  if [ "$decision" != "y" ] && [ "$decision" != "Y" ]; then
-    exit 0
-  fi
-fi
-
-echo "### Creating a dummy certificate so nginx can start ..."
-mkdir -p "$data_path/conf/live/${domains[0]}"
-docker compose run --rm --entrypoint "\
-  openssl req -x509 -nodes -newkey rsa:$rsa_key_size -days 1 \
-    -keyout '/etc/letsencrypt/live/${domains[0]}/privkey.pem' \
-    -out '/etc/letsencrypt/live/${domains[0]}/fullchain.pem' \
-    -subj '/CN=localhost'" certbot
-
-echo "### Starting nginx ..."
-docker compose up -d nginx
-
-echo "### Deleting the dummy certificate ..."
-docker compose run --rm --entrypoint "\
-  rm -rf /etc/letsencrypt/live/${domains[0]} \
-         /etc/letsencrypt/archive/${domains[0]} \
-         /etc/letsencrypt/renewal/${domains[0]}.conf" certbot
+echo "### Making sure nginx and its dependencies are up ..."
+docker compose up -d
 
 domain_args=""
 for domain in "${domains[@]}"; do

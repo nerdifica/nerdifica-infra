@@ -16,6 +16,23 @@ services:
     expose:
       - "3000"
 
+  # One-shot: guarantees a certificate file exists at the path nginx.conf
+  # expects before nginx ever starts, even on a brand new host or if
+  # ./certbot/conf was wiped. Runs on every `docker compose up`, but no-ops
+  # (exits 0 immediately) once a real Let's Encrypt cert is in place, dummy
+  # or real. Without this, nginx fails its config load (missing
+  # ssl_certificate file) and crash-loops under `restart: unless-stopped`.
+  cert-init:
+    image: alpine/openssl
+    entrypoint: >
+      /bin/sh -c "
+      if [ ! -f /etc/letsencrypt/live/nerdifica.com/fullchain.pem ]; then
+        mkdir -p /etc/letsencrypt/live/nerdifica.com;
+        openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout /etc/letsencrypt/live/nerdifica.com/privkey.pem -out /etc/letsencrypt/live/nerdifica.com/fullchain.pem -subj '/CN=localhost';
+      fi"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
@@ -27,8 +44,12 @@ services:
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
     depends_on:
-      - site
-      - api
+      cert-init:
+        condition: service_completed_successfully
+      site:
+        condition: service_started
+      api:
+        condition: service_started
     # Reloads periodically so renewed certificates (written by the certbot
     # service below) get picked up without a manual restart. The first reload
     # races nginx's own startup and harmlessly no-ops; every reload after that
