@@ -44,14 +44,16 @@ if [ "$force" != "0" ]; then
   renewal_arg="--force-renewal"
 fi
 
-# cert-init (docker-compose.yml) writes a throwaway self-signed cert straight
-# into live/<domain> so nginx always has something to start with. Certbot
-# refuses to touch that path once populated unless it also owns a matching
-# renewal config ("live directory exists for ..." error) — so if we don't
-# see that config yet, this is still the dummy cert, and it's safe to clear
-# it before asking for the real one.
+# cert-init (docker-compose.yml) writes a throwaway self-signed cert (CN=
+# localhost) straight into live/<domain> so nginx always has something to
+# start with. Certbot won't reuse that path for a real lineage unless we
+# clear it first — checking the cert's own issuer is what actually tells us
+# it's the dummy (a missing renewal config isn't reliable: certbot has been
+# observed to silently fall back to a "<domain>-0001" lineage instead of
+# reusing the name, which nginx.conf doesn't know to look for).
 primary_domain="${domains[0]}"
-if [ -d "./certbot/conf/live/$primary_domain" ] && [ ! -f "./certbot/conf/renewal/$primary_domain.conf" ]; then
+cert_path="./certbot/conf/live/$primary_domain/fullchain.pem"
+if [ -f "$cert_path" ] && openssl x509 -in "$cert_path" -noout -issuer 2>/dev/null | grep -q "CN *= *localhost"; then
   echo "### Clearing the dummy certificate so certbot can create a real lineage ..."
   docker compose run --rm --entrypoint "\
     rm -rf /etc/letsencrypt/live/$primary_domain \
@@ -64,6 +66,7 @@ docker compose run --rm --entrypoint "\
   certbot certonly --webroot -w /var/www/certbot \
     $staging_arg \
     $domain_args \
+    --cert-name $primary_domain \
     --email $email \
     --agree-tos \
     --no-eff-email \
