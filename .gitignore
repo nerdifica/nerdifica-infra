@@ -1,6 +1,3 @@
-nerdifica-site/
-nerdifica-api/
-
 # Let's Encrypt certs/keys generated on the host by ensure-cert.sh / certbot
 certbot/
 
