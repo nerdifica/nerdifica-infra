@@ -1,28 +1,30 @@
 #!/usr/bin/env bash
-# One-time bootstrap to obtain the first real Let's Encrypt certificate.
+# Requests a real Let's Encrypt certificate if one isn't already in place.
 #
-# Run this manually on the production host, once, after DNS for the
-# domains below already resolves to this host's public IP (Let's Encrypt
-# validates ownership over HTTP). `docker compose up -d` alone is safe to
-# run before this — the `cert-init` service in docker-compose.yml already
-# guarantees nginx has *a* certificate (a throwaway self-signed one) to
-# start with; this script replaces it with the real thing.
+# Safe to run on every deploy (and the infra deploy.yml does): by default
+# this uses --keep-until-expiring, so certbot only talks to Let's Encrypt
+# the first time (or once the cert is actually close to expiry) — every
+# other run is a fast local no-op. Don't change that to --force-renewal for
+# routine use, it'll burn through Let's Encrypt's ~5-duplicate-certs-per-week
+# rate limit after a handful of deploys.
 #
-# After this runs once, the `certbot` service in docker-compose.yml renews
-# the real certificate automatically — no need to run this again unless
-# the domain list changes.
+# CERTBOT_EMAIL can come from the environment (the deploy pipeline passes it
+# from a GitHub secret) or from a local .env file for manual runs.
+#
+# To force a fresh certificate (e.g. after changing the domain list), run
+# with FORCE=1 ./ensure-cert.sh instead.
 set -euo pipefail
 
-if [ -f .env ]; then
+if [ -z "${CERTBOT_EMAIL:-}" ] && [ -f .env ]; then
   set -a
   source .env
   set +a
 fi
 
 domains=(nerdifica.com www.nerdifica.com)
-rsa_key_size=4096
-email="${CERTBOT_EMAIL:?Set CERTBOT_EMAIL (see .env.example) before running this script}"
+email="${CERTBOT_EMAIL:?Set CERTBOT_EMAIL (env var, GitHub secret, or .env — see .env.example)}"
 staging="${STAGING:-0}"
+force="${FORCE:-0}"
 
 echo "### Making sure nginx and its dependencies are up ..."
 docker compose up -d
@@ -37,16 +39,20 @@ if [ "$staging" != "0" ]; then
   staging_arg="--staging"
 fi
 
-echo "### Requesting the real certificate from Let's Encrypt ..."
+renewal_arg="--keep-until-expiring"
+if [ "$force" != "0" ]; then
+  renewal_arg="--force-renewal"
+fi
+
+echo "### Requesting a certificate from Let's Encrypt (if needed) ..."
 docker compose run --rm --entrypoint "\
   certbot certonly --webroot -w /var/www/certbot \
     $staging_arg \
     $domain_args \
     --email $email \
-    --rsa-key-size $rsa_key_size \
     --agree-tos \
     --no-eff-email \
-    --force-renewal" certbot
+    $renewal_arg" certbot
 
 echo "### Reloading nginx ..."
 docker compose exec nginx nginx -s reload
