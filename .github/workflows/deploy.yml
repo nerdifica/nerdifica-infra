@@ -19,6 +19,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 5m
           script: |
+            set -e
             sudo -n mkdir -p ${{ secrets.INFRA_DIR }}
             sudo -n chown -R $(whoami):$(whoami) ${{ secrets.INFRA_DIR }}
             cd ${{ secrets.INFRA_DIR }}
